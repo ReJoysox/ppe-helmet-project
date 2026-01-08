@@ -2,212 +2,326 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8" />
-    <title>Контроль СИЗ (каска/жилет)</title>
+    <title>Контроль ношения СИЗ</title>
 
     <!-- TensorFlow.js и библиотека Teachable Machine -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
-            font-family: sans-serif;
-            text-align: center;
             margin: 0;
-            padding: 20px;
-            background: #f5f5f5;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: linear-gradient(135deg, #1f2933, #4b5563);
+            color: #111827;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-
-        h1 {
-            margin-bottom: 10px;
+        .card {
+            background: #ffffff;
+            border-radius: 18px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+            max-width: 960px;
+            width: 96%;
+            padding: 24px 28px 26px;
         }
-
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 12px;
+        }
+        .card-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #111827;
+        }
+        .card-subtitle {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .card-main {
+            display: flex;
+            gap: 24px;
             margin-top: 10px;
-            cursor: pointer;
+            flex-wrap: wrap;
+        }
+        .video-panel {
+            flex: 1 1 360px;
+        }
+        .status-panel {
+            flex: 0 0 260px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
+        .btn {
+            padding: 8px 16px;
+            font-size: 15px;
+            border-radius: 999px;
+            border: none;
+            background: #2563eb;
+            color: #ffffff;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(37,99,235,0.3);
+            transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.1s ease;
+        }
+        .btn:hover {
+            background: #1d4ed8;
+            box-shadow: 0 6px 14px rgba(37,99,235,0.4);
+            transform: translateY(-1px);
+        }
+        .btn:active {
+            transform: translateY(0);
+            box-shadow: 0 3px 8px rgba(37,99,235,0.35);
+        }
+
+        .video-frame {
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 14px;
+            background: #f3f4f6;
+            border: 2px solid transparent;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .video-frame.safe {
+            border-color: #22c55e;
+            box-shadow: 0 0 0 1px rgba(34,197,94,0.4);
+        }
+        .video-frame.danger {
+            border-color: #ef4444;
+            box-shadow: 0 0 0 1px rgba(239,68,68,0.5);
+        }
         #webcam-container {
-            margin-top: 20px;
             display: flex;
             justify-content: center;
         }
-
         #webcam-container canvas {
-            border: 2px solid #999;
+            border-radius: 10px;
             background: #000;
-        }
-
-        #label-container {
-            margin-top: 15px;
-        }
-
-        #label-container div {
-            margin: 4px 0;
-            font-size: 16px;
+            max-width: 100%;
         }
 
         /* КРУГЛЫЙ ИНДИКАТОР СТАТУСА */
         #status-indicator {
-            width: 120px;
-            height: 120px;
+            width: 140px;
+            height: 140px;
             border-radius: 50%;
-            margin: 20px auto 0 auto;
+            margin-top: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-weight: bold;
-            font-size: 16px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.25);
+            font-weight: 700;
+            font-size: 18px;
+            box-shadow: 0 0 28px rgba(0,0,0,0.35);
             text-align: center;
             padding: 10px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
         }
-
         /* СИЗ надеты (зелёный) */
         #status-indicator.ok {
-            background-color: #2ecc71;
-            box-shadow: 0 0 25px rgba(46, 204, 113, 0.8);
+            background: radial-gradient(circle at 30% 30%, #bbf7d0, #16a34a);
+            box-shadow:
+                0 0 0 2px rgba(34,197,94,0.7),
+                0 0 40px rgba(22,163,74,0.85);
         }
-
         /* СИЗ нет (красный) */
         #status-indicator.bad {
-            background-color: #e74c3c;
-            box-shadow: 0 0 25px rgba(231, 76, 60, 0.8);
+            background: radial-gradient(circle at 30% 30%, #fecaca, #dc2626);
+            box-shadow:
+                0 0 0 2px rgba(239,68,68,0.8),
+                0 0 40px rgba(220,38,38,0.9);
+        }
+
+        .status-caption {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #6b7280;
+            text-align: center;
+        }
+
+        #label-container {
+            margin-top: 16px;
+            font-size: 14px;
+        }
+        #label-container div {
+            margin: 2px 0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            color: #374151;
+        }
+
+        @media (max-width: 768px) {
+            .card {
+                padding: 18px 16px 20px;
+            }
+            .card-main {
+                flex-direction: column;
+            }
+            #status-indicator {
+                width: 120px;
+                height: 120px;
+                font-size: 16px;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Прототип контроля ношения СИЗ</h1>
-    <p>Камера + нейросеть определяют, надеты ли каска и жилет.</p>
+<div class="card">
+    <div class="card-header">
+        <div>
+            <div class="card-title">Контроль ношения СИЗ</div>
+            <div class="card-subtitle">Нейросеть анализирует изображение и показывает, надеты ли каска и жилет</div>
+        </div>
+        <button class="btn" onclick="init()">Запустить</button>
+    </div>
 
-    <button onclick="init()">Запустить камеру и модель</button>
+    <div class="card-main">
+        <!-- Левая часть: видео -->
+        <div class="video-panel">
+            <div id="video-frame" class="video-frame">
+                <div id="webcam-container"></div>
+            </div>
+        </div>
 
-    <!-- КРУГ-ИНДИКАТОР СТАТУСА -->
-    <div id="status-indicator" class="bad">ОЖИДАНИЕ<br>КАМЕРЫ/МОДЕЛИ</div>
+        <!-- Правая часть: индикатор и вероятности -->
+        <div class="status-panel">
+            <div id="status-indicator" class="bad">
+                Ожидание
+            </div>
+            <div class="status-caption">
+                Зелёный — СИЗ надеты<br>Красный — СИЗ не надеты
+            </div>
 
-    <!-- КАМЕРА -->
-    <div id="webcam-container"></div>
+            <div id="label-container"></div>
+        </div>
+    </div>
+</div>
 
-    <!-- ВЕРОЯТНОСТИ КЛАССОВ -->
-    <div id="label-container"></div>
+<script>
+    // ===== НАСТРОЙКИ ПОД ТВОЮ МОДЕЛЬ =====
 
-    <script>
-        // ====== НАСТРОЙКИ ПОД ТЕБЯ ======
+    // 1. ПУТЬ К ФАЙЛАМ МОДЕЛИ (у тебя есть папка model/)
+    const MODEL_DIR = "model/";
 
-        // 1. ПУТЬ К ФАЙЛАМ МОДЕЛИ
-        // Если model.json и metadata.json лежат РЯДОМ с index.html:
-        const MODEL_DIR = ""; // пустая строка
+    const modelURL = MODEL_DIR + "model.json";
+    const metadataURL = MODEL_DIR + "metadata.json";
 
-        // Если они лежат в папке "model", то так:
-        // const MODEL_DIR = "model/";
+    // 2. ТОЧНЫЕ ИМЕНА КЛАССОВ из metadata.json -> "labels": [...]
+    // Сейчас стоят WITH_PPE и NO_PPE. Если в metadata.json другие,
+    // замени строки ниже, чтобы они совпадали.
+    const CLASS_WITH_PPE = "WITH_PPE"; // класс: СИЗ надеты
+    const CLASS_NO_PPE   = "NO_PPE";   // класс: СИЗ нет
 
-        const modelURL = MODEL_DIR + "model.json";
-        const metadataURL = MODEL_DIR + "metadata.json";
+    // Пример, если в metadata.json написано "labels": ["СИЗ_ЕСТЬ","СИЗ_НЕТ"]:
+    // const CLASS_WITH_PPE = "СИЗ_ЕСТЬ";
+    // const CLASS_NO_PPE   = "СИЗ_НЕТ";
 
-        // 2. ТОЧНЫЕ ИМЕНА КЛАССОВ ИЗ Teachable Machine
-        // Узнай их в metadata.json -> "labels": ["...", "..."]
-        // ПРИМЕР: если там ["WITH_PPE","NO_PPE"], то оставляй так:
-        const CLASS_WITH_PPE = "WITH_PPE"; // класс: СИЗ надеты
-        const CLASS_NO_PPE   = "NO_PPE";   // класс: СИЗ нет
+    // =======================
 
-        // Если у тебя, например, ["СИЗ_ЕСТЬ","СИЗ_НЕТ"], то надо так:
-        // const CLASS_WITH_PPE = "СИЗ_ЕСТЬ";
-        // const CLASS_NO_PPE   = "СИЗ_НЕТ";
+    let model, webcam, labelContainer, maxPredictions;
 
-        // ====== ДАЛЬШЕ МОЖНО НЕ МЕНЯТЬ ======
+    async function init() {
+        // Загружаем модель
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+        console.log("Модель загружена, классов:", maxPredictions);
 
-        let model, webcam, labelContainer, maxPredictions;
+        // Настройка веб-камеры
+        const flip = true;
+        webcam = new tmImage.Webcam(400, 300, flip);
 
-        async function init() {
-            // Загружаем модель
-            model = await tmImage.load(modelURL, metadataURL);
-            maxPredictions = model.getTotalClasses();
-            console.log("Model loaded, classes:", maxPredictions);
-
-            // Настраиваем веб-камеру
-            const flip = true;
-            webcam = new tmImage.Webcam(400, 300, flip);
-
-            try {
-                await webcam.setup(); // запрос доступа к камере
-                await webcam.play();
-            } catch (e) {
-                console.error("Ошибка доступа к камере:", e);
-                alert("Браузер не получил доступ к камере. Разреши использование камеры в настройках сайта.");
-                return;
-            }
-
-            window.requestAnimationFrame(loop);
-
-            // Добавляем камеру на страницу
-            const webcamContainer = document.getElementById("webcam-container");
-            webcamContainer.innerHTML = "";
-            webcamContainer.appendChild(webcam.canvas);
-
-            // Контейнер для вероятностей
-            labelContainer = document.getElementById("label-container");
-            labelContainer.innerHTML = "";
-            for (let i = 0; i < maxPredictions; i++) {
-                labelContainer.appendChild(document.createElement("div"));
-            }
-
-            // Обновим индикатор
-            const indicator = document.getElementById("status-indicator");
-            indicator.textContent = "Идёт анализ...";
+        try {
+            await webcam.setup();
+            await webcam.play();
+        } catch (e) {
+            console.error("Ошибка доступа к камере:", e);
+            alert("Браузер не получил доступ к камере. Разреши использование камеры в настройках сайта.");
+            return;
         }
 
-        async function loop() {
-            webcam.update();
-            await predict();
-            window.requestAnimationFrame(loop);
+        window.requestAnimationFrame(loop);
+
+        const webcamContainer = document.getElementById("webcam-container");
+        webcamContainer.innerHTML = "";
+        webcamContainer.appendChild(webcam.canvas);
+
+        labelContainer = document.getElementById("label-container");
+        labelContainer.innerHTML = "";
+        for (let i = 0; i < maxPredictions; i++) {
+            labelContainer.appendChild(document.createElement("div"));
         }
 
-        async function predict() {
-            const prediction = await model.predict(webcam.canvas);
+        const indicator = document.getElementById("status-indicator");
+        indicator.textContent = "Анализ...";
+    }
 
-            // Отладка: вывод в консоль, какие есть классы и вероятности
-            // Открой F12 -> Console и посмотри:
-            console.log(prediction.map(p => `${p.className}: ${p.probability.toFixed(2)}`));
+    async function loop() {
+        webcam.update();
+        await predict();
+        window.requestAnimationFrame(loop);
+    }
 
-            // Пишем вероятности внизу
-            for (let i = 0; i < maxPredictions; i++) {
-                const classPrediction =
-                    prediction[i].className + ": " +
-                    prediction[i].probability.toFixed(2);
-                labelContainer.childNodes[i].innerHTML = classPrediction;
-            }
+    async function predict() {
+        const prediction = await model.predict(webcam.canvas);
 
-            // Находим самый вероятный класс
-            let bestIndex = 0;
-            let bestProb = prediction[0].probability;
-            for (let i = 1; i < maxPredictions; i++) {
-                if (prediction[i].probability > bestProb) {
-                    bestProb = prediction[i].probability;
-                    bestIndex = i;
-                }
-            }
-            const bestClassName = prediction[bestIndex].className;
+        // Вероятности по классам (для отладки и отчёта)
+        for (let i = 0; i < maxPredictions; i++) {
+            const p = prediction[i];
+            const classPrediction =
+                p.className + ": " +
+                p.probability.toFixed(2);
+            labelContainer.childNodes[i].innerHTML = classPrediction;
+        }
 
-            // Обновляем кружок-индикатор
-            const indicator = document.getElementById("status-indicator");
-
-            if (bestClassName === CLASS_WITH_PPE) {
-                indicator.classList.remove("bad");
-                indicator.classList.add("ok");
-                indicator.textContent = "СИЗ НАДЕТЫ";
-            } else if (bestClassName === CLASS_NO_PPE) {
-                indicator.classList.remove("ok");
-                indicator.classList.add("bad");
-                indicator.textContent = "НЕТ СИЗ";
-            } else {
-                // На случай, если есть другие классы
-                indicator.classList.remove("ok");
-                indicator.classList.add("bad");
-                indicator.textContent = bestClassName;
+        // Определяем самый вероятный класс
+        let bestIndex = 0;
+        let bestProb = prediction[0].probability;
+        for (let i = 1; i < maxPredictions; i++) {
+            if (prediction[i].probability > bestProb) {
+                bestProb = prediction[i].probability;
+                bestIndex = i;
             }
         }
-    </script>
+        const bestClassName = prediction[bestIndex].className;
+
+        const indicator = document.getElementById("status-indicator");
+        const videoFrame = document.getElementById("video-frame");
+
+        // Меняем цвет круга и рамки вокруг видео
+        if (bestClassName === CLASS_WITH_PPE) {
+            indicator.classList.remove("bad");
+            indicator.classList.add("ok");
+            indicator.textContent = "СИЗ НАДЕТЫ";
+
+            videoFrame.classList.remove("danger");
+            videoFrame.classList.add("safe");
+        } else if (bestClassName === CLASS_NO_PPE) {
+            indicator.classList.remove("ok");
+            indicator.classList.add("bad");
+            indicator.textContent = "НЕТ СИЗ";
+
+            videoFrame.classList.remove("safe");
+            videoFrame.classList.add("danger");
+        } else {
+            // На случай других классов
+            indicator.classList.remove("ok");
+            indicator.classList.add("bad");
+            indicator.textContent = bestClassName;
+
+            videoFrame.classList.remove("safe");
+            videoFrame.classList.add("danger");
+        }
+    }
+</script>
 </body>
 </html>

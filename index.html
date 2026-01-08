@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <title>Контроль СИЗ (каска/жилет)</title>
 
-    <!-- TensorFlow.js и Teachable Machine -->
+    <!-- TensorFlow.js и библиотека Teachable Machine -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
@@ -14,62 +14,109 @@
             text-align: center;
             margin: 0;
             padding: 20px;
+            background: #f5f5f5;
         }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+
         #webcam-container {
             margin-top: 20px;
+            display: flex;
+            justify-content: center;
         }
+
         #webcam-container canvas {
             border: 2px solid #999;
+            background: #000;
         }
+
+        #label-container {
+            margin-top: 15px;
+        }
+
         #label-container div {
             margin: 4px 0;
             font-size: 16px;
         }
-        /* Круглый индикатор статуса */
+
+        /* КРУГЛЫЙ ИНДИКАТОР СТАТУСА */
         #status-indicator {
-            width: 90px;
-            height: 90px;
+            width: 120px;
+            height: 120px;
             border-radius: 50%;
-            margin: 20px auto;
+            margin: 20px auto 0 auto;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: bold;
-            font-size: 14px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            font-size: 16px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.25);
+            text-align: center;
+            padding: 10px;
         }
-        /* СИЗ надеты */
+
+        /* СИЗ надеты (зелёный) */
         #status-indicator.ok {
-            background-color: #2ecc71; /* зелёный */
-            box-shadow: 0 0 20px rgba(46, 204, 113, 0.7);
+            background-color: #2ecc71;
+            box-shadow: 0 0 25px rgba(46, 204, 113, 0.8);
         }
-        /* СИЗ нет */
+
+        /* СИЗ нет (красный) */
         #status-indicator.bad {
-            background-color: #e74c3c; /* красный */
-            box-shadow: 0 0 20px rgba(231, 76, 60, 0.7);
+            background-color: #e74c3c;
+            box-shadow: 0 0 25px rgba(231, 76, 60, 0.8);
         }
     </style>
 </head>
 <body>
     <h1>Прототип контроля ношения СИЗ</h1>
+    <p>Камера + нейросеть определяют, надеты ли каска и жилет.</p>
+
     <button onclick="init()">Запустить камеру и модель</button>
 
-    <!-- КРУЖОК-ИНДИКАТОР -->
-    <div id="status-indicator" class="bad">НЕТ СИЗ</div>
+    <!-- КРУГ-ИНДИКАТОР СТАТУСА -->
+    <div id="status-indicator" class="bad">ОЖИДАНИЕ<br>КАМЕРЫ/МОДЕЛИ</div>
 
+    <!-- КАМЕРА -->
     <div id="webcam-container"></div>
+
+    <!-- ВЕРОЯТНОСТИ КЛАССОВ -->
     <div id="label-container"></div>
 
     <script>
-        // === 1. Пути к модели ===
-        // Если model.json и metadata.json лежат рядом с index.html:
-        const modelURL = "model.json";
-        const metadataURL = "metadata.json";
+        // ====== НАСТРОЙКИ ПОД ТЕБЯ ======
 
-        // Если они в папке model/, то так:
-        // const modelURL = "model/model.json";
-        // const metadataURL = "model/metadata.json";
+        // 1. ПУТЬ К ФАЙЛАМ МОДЕЛИ
+        // Если model.json и metadata.json лежат РЯДОМ с index.html:
+        const MODEL_DIR = ""; // пустая строка
+
+        // Если они лежат в папке "model", то так:
+        // const MODEL_DIR = "model/";
+
+        const modelURL = MODEL_DIR + "model.json";
+        const metadataURL = MODEL_DIR + "metadata.json";
+
+        // 2. ТОЧНЫЕ ИМЕНА КЛАССОВ ИЗ Teachable Machine
+        // Узнай их в metadata.json -> "labels": ["...", "..."]
+        // ПРИМЕР: если там ["WITH_PPE","NO_PPE"], то оставляй так:
+        const CLASS_WITH_PPE = "WITH_PPE"; // класс: СИЗ надеты
+        const CLASS_NO_PPE   = "NO_PPE";   // класс: СИЗ нет
+
+        // Если у тебя, например, ["СИЗ_ЕСТЬ","СИЗ_НЕТ"], то надо так:
+        // const CLASS_WITH_PPE = "СИЗ_ЕСТЬ";
+        // const CLASS_NO_PPE   = "СИЗ_НЕТ";
+
+        // ====== ДАЛЬШЕ МОЖНО НЕ МЕНЯТЬ ======
 
         let model, webcam, labelContainer, maxPredictions;
 
@@ -77,13 +124,14 @@
             // Загружаем модель
             model = await tmImage.load(modelURL, metadataURL);
             maxPredictions = model.getTotalClasses();
+            console.log("Model loaded, classes:", maxPredictions);
 
             // Настраиваем веб-камеру
             const flip = true;
             webcam = new tmImage.Webcam(400, 300, flip);
 
             try {
-                await webcam.setup();
+                await webcam.setup(); // запрос доступа к камере
                 await webcam.play();
             } catch (e) {
                 console.error("Ошибка доступа к камере:", e);
@@ -104,6 +152,10 @@
             for (let i = 0; i < maxPredictions; i++) {
                 labelContainer.appendChild(document.createElement("div"));
             }
+
+            // Обновим индикатор
+            const indicator = document.getElementById("status-indicator");
+            indicator.textContent = "Идёт анализ...";
         }
 
         async function loop() {
@@ -115,7 +167,11 @@
         async function predict() {
             const prediction = await model.predict(webcam.canvas);
 
-            // Выводим вероятности по классам
+            // Отладка: вывод в консоль, какие есть классы и вероятности
+            // Открой F12 -> Console и посмотри:
+            console.log(prediction.map(p => `${p.className}: ${p.probability.toFixed(2)}`));
+
+            // Пишем вероятности внизу
             for (let i = 0; i < maxPredictions; i++) {
                 const classPrediction =
                     prediction[i].className + ": " +
@@ -123,9 +179,7 @@
                 labelContainer.childNodes[i].innerHTML = classPrediction;
             }
 
-            // === ЛОГИКА ЗЕЛЁНОГО/КРАСНОГО КРУЖКА ===
-
-            // 1. Находим класс с максимальной вероятностью
+            // Находим самый вероятный класс
             let bestIndex = 0;
             let bestProb = prediction[0].probability;
             for (let i = 1; i < maxPredictions; i++) {
@@ -136,16 +190,9 @@
             }
             const bestClassName = prediction[bestIndex].className;
 
-            // 2. Берём элемент кружка
+            // Обновляем кружок-индикатор
             const indicator = document.getElementById("status-indicator");
 
-            // 3. Названия классов из Teachable Machine
-            // ПОДГОНИ ПОД СВОИ!!! Например:
-            // "WITH_PPE" и "NO_PPE", или "СИЗ_ЕСТЬ" и "СИЗ_НЕТ"
-            const CLASS_WITH_PPE = "WITH_PPE"; // класс, где СИЗ надеты
-            const CLASS_NO_PPE   = "NO_PPE";   // класс, где СИЗ нет
-
-            // 4. В зависимости от лучшего класса — красим кружок
             if (bestClassName === CLASS_WITH_PPE) {
                 indicator.classList.remove("bad");
                 indicator.classList.add("ok");
@@ -155,7 +202,7 @@
                 indicator.classList.add("bad");
                 indicator.textContent = "НЕТ СИЗ";
             } else {
-                // На случай дополнительных классов
+                // На случай, если есть другие классы
                 indicator.classList.remove("ok");
                 indicator.classList.add("bad");
                 indicator.textContent = bestClassName;

@@ -2,9 +2,9 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8" />
-    <title>Прототип контроля СИЗ</title>
+    <title>Контроль СИЗ (каска/жилет)</title>
 
-    <!-- Подключаем TensorFlow.js и библиотеку Teachable Machine -->
+    <!-- TensorFlow.js и Teachable Machine -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
@@ -18,13 +18,36 @@
         #webcam-container {
             margin-top: 20px;
         }
-        /* Делаем рамку вокруг картинки, чтобы точно было видно, что она есть */
         #webcam-container canvas {
-            border: 3px solid red;
+            border: 2px solid #999;
         }
         #label-container div {
             margin: 4px 0;
-            font-size: 18px;
+            font-size: 16px;
+        }
+        /* Круглый индикатор статуса */
+        #status-indicator {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        }
+        /* СИЗ надеты */
+        #status-indicator.ok {
+            background-color: #2ecc71; /* зелёный */
+            box-shadow: 0 0 20px rgba(46, 204, 113, 0.7);
+        }
+        /* СИЗ нет */
+        #status-indicator.bad {
+            background-color: #e74c3c; /* красный */
+            box-shadow: 0 0 20px rgba(231, 76, 60, 0.7);
         }
     </style>
 </head>
@@ -32,33 +55,36 @@
     <h1>Прототип контроля ношения СИЗ</h1>
     <button onclick="init()">Запустить камеру и модель</button>
 
+    <!-- КРУЖОК-ИНДИКАТОР -->
+    <div id="status-indicator" class="bad">НЕТ СИЗ</div>
+
     <div id="webcam-container"></div>
     <div id="label-container"></div>
 
     <script>
-        // Путь к папке с моделью (рядом с index.html должна быть папка "model")
-        const MODEL_DIR = "model/";
-        const modelURL = MODEL_DIR + "model.json";
-        const metadataURL = MODEL_DIR + "metadata.json";
+        // === 1. Пути к модели ===
+        // Если model.json и metadata.json лежат рядом с index.html:
+        const modelURL = "model.json";
+        const metadataURL = "metadata.json";
+
+        // Если они в папке model/, то так:
+        // const modelURL = "model/model.json";
+        // const metadataURL = "model/metadata.json";
 
         let model, webcam, labelContainer, maxPredictions;
 
         async function init() {
-            console.log("init() started");
-
             // Загружаем модель
             model = await tmImage.load(modelURL, metadataURL);
             maxPredictions = model.getTotalClasses();
-            console.log("Model loaded, classes:", maxPredictions);
 
             // Настраиваем веб-камеру
-            const flip = true; // зеркальное отражение
+            const flip = true;
             webcam = new tmImage.Webcam(400, 300, flip);
 
             try {
-                await webcam.setup(); // запрос доступа к камере
+                await webcam.setup();
                 await webcam.play();
-                console.log("Webcam started");
             } catch (e) {
                 console.error("Ошибка доступа к камере:", e);
                 alert("Браузер не получил доступ к камере. Разреши использование камеры в настройках сайта.");
@@ -67,12 +93,12 @@
 
             window.requestAnimationFrame(loop);
 
-            // Добавляем canvas c камерой на страницу
+            // Добавляем камеру на страницу
             const webcamContainer = document.getElementById("webcam-container");
-            webcamContainer.innerHTML = ""; // на всякий случай очищаем
+            webcamContainer.innerHTML = "";
             webcamContainer.appendChild(webcam.canvas);
 
-            // Блок для вывода вероятностей
+            // Контейнер для вероятностей
             labelContainer = document.getElementById("label-container");
             labelContainer.innerHTML = "";
             for (let i = 0; i < maxPredictions; i++) {
@@ -81,18 +107,58 @@
         }
 
         async function loop() {
-            webcam.update(); // обновляем кадр
+            webcam.update();
             await predict();
             window.requestAnimationFrame(loop);
         }
 
         async function predict() {
             const prediction = await model.predict(webcam.canvas);
+
+            // Выводим вероятности по классам
             for (let i = 0; i < maxPredictions; i++) {
                 const classPrediction =
                     prediction[i].className + ": " +
                     prediction[i].probability.toFixed(2);
                 labelContainer.childNodes[i].innerHTML = classPrediction;
+            }
+
+            // === ЛОГИКА ЗЕЛЁНОГО/КРАСНОГО КРУЖКА ===
+
+            // 1. Находим класс с максимальной вероятностью
+            let bestIndex = 0;
+            let bestProb = prediction[0].probability;
+            for (let i = 1; i < maxPredictions; i++) {
+                if (prediction[i].probability > bestProb) {
+                    bestProb = prediction[i].probability;
+                    bestIndex = i;
+                }
+            }
+            const bestClassName = prediction[bestIndex].className;
+
+            // 2. Берём элемент кружка
+            const indicator = document.getElementById("status-indicator");
+
+            // 3. Названия классов из Teachable Machine
+            // ПОДГОНИ ПОД СВОИ!!! Например:
+            // "WITH_PPE" и "NO_PPE", или "СИЗ_ЕСТЬ" и "СИЗ_НЕТ"
+            const CLASS_WITH_PPE = "WITH_PPE"; // класс, где СИЗ надеты
+            const CLASS_NO_PPE   = "NO_PPE";   // класс, где СИЗ нет
+
+            // 4. В зависимости от лучшего класса — красим кружок
+            if (bestClassName === CLASS_WITH_PPE) {
+                indicator.classList.remove("bad");
+                indicator.classList.add("ok");
+                indicator.textContent = "СИЗ НАДЕТЫ";
+            } else if (bestClassName === CLASS_NO_PPE) {
+                indicator.classList.remove("ok");
+                indicator.classList.add("bad");
+                indicator.textContent = "НЕТ СИЗ";
+            } else {
+                // На случай дополнительных классов
+                indicator.classList.remove("ok");
+                indicator.classList.add("bad");
+                indicator.textContent = bestClassName;
             }
         }
     </script>

@@ -2,235 +2,138 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>SafeGuard ИИ | Система мониторинга v5.0 Pro</title>
-    <!-- Подключаем ядро Roboflow -->
+    <title>SafeGuard ИИ | Debug Mode</title>
     <script src="https://cdn.roboflow.com/0.2.26/roboflow.js"></script>
     <style>
-        :root { --p: #3b82f6; --bg: #0f172a; --c: #1e293b; --s: #22c55e; --d: #ef4444; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; padding: 20px; text-align: center; }
-        
-        .dashboard { 
-            max-width: 1200px; 
-            margin: auto; 
-            background: var(--c); 
-            padding: 30px; 
-            border-radius: 25px; 
-            box-shadow: 0 20px 60px rgba(0,0,0,0.6); 
-            display: grid; 
-            grid-template-columns: 1fr 320px; 
-            gap: 25px; 
-        }
-
-        h1 { color: var(--p); margin: 0 0 5px 0; font-size: 1.7rem; }
-        .status-line { font-size: 0.9rem; margin-bottom: 20px; color: #94a3b8; font-weight: bold; }
-        #status-msg { color: #38bdf8; }
-
-        #viewer-container { 
-            position: relative; 
-            width: 640px; 
-            height: 480px; 
-            background: #000; 
-            border-radius: 15px; 
-            overflow: hidden; 
-            border: 3px solid #334155; 
-            margin: 0 auto;
-        }
+        :root { --p: #3b82f6; --bg: #0f172a; --c: #1e293b; --d: #ef4444; }
+        body { font-family: sans-serif; background: var(--bg); color: white; margin: 0; padding: 20px; text-align: center; }
+        .dashboard { max-width: 1000px; margin: auto; background: var(--c); padding: 30px; border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+        #monitor { position: relative; width: 640px; height: 480px; background: #000; border-radius: 12px; overflow: hidden; border: 3px solid #334155; margin: 0 auto; }
         video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
-
-        .controls { display: flex; gap: 12px; justify-content: center; margin-top: 20px; }
-        .btn { 
-            padding: 12px 20px; 
-            background: var(--p); 
-            color: white; 
-            border: none; 
+        .btn { padding: 12px 25px; background: var(--p); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 15px; }
+        
+        /* ОКНО ОТЛАДКИ */
+        #debug-console { 
+            background: #000; 
+            color: #22c55e; 
+            padding: 15px; 
             border-radius: 10px; 
-            cursor: pointer; 
-            font-weight: bold; 
-            transition: 0.3s; 
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
-        .btn-upload { background: #8b5cf6; }
-        .btn-download { background: #10b981; margin-top: 10px; font-size: 0.8rem; padding: 8px; }
-
-        .side-panel { 
-            background: #0f172a80; 
-            padding: 20px; 
-            border-radius: 18px; 
             text-align: left; 
-            display: flex; 
-            flex-direction: column; 
+            font-family: monospace; 
+            font-size: 12px; 
+            margin-top: 20px; 
+            max-height: 150px; 
+            overflow-y: auto;
             border: 1px solid #334155;
         }
-        #log { font-size: 12px; color: #94a3b8; flex-grow: 1; overflow-y: auto; margin-top: 15px; }
-        .log-entry { margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #1e293b; line-height: 1.4; }
-
-        input[type="file"] { display: none; }
-        .alert { color: var(--d) !important; font-weight: bold; }
+        .err-msg { color: var(--d); font-weight: bold; padding: 10px; background: rgba(239, 68, 68, 0.1); border-radius: 5px; margin-bottom: 10px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="dashboard">
-    <div class="main">
-        <h1>🛡️ SafeGuard ИИ <small style="opacity:0.5; font-size:0.6em">v5.0 Pro</small></h1>
-        <div class="status-line">Статус системы: <span id="status-msg">Инициализация YOLOv8...</span></div>
-        
-        <div id="viewer-container">
-            <video id="video" autoplay muted playsinline style="display:none;"></video>
-            <canvas id="canvas" width="640" height="480"></canvas>
-        </div>
+    <h1>🛡️ SafeGuard ИИ: Отладка системы</h1>
+    
+    <!-- Сюда выведем реальную ошибку -->
+    <div id="error-display" class="err-msg"></div>
 
-        <div class="controls">
-            <button class="btn" onclick="startCamera()">🎥 ЖИВОЙ ЭФИР</button>
-            <label class="btn btn-upload">
-                📁 АНАЛИЗ ФОТО
-                <input type="file" accept="image/*" onchange="processImage(event)">
-            </label>
-        </div>
-        <button id="download-btn" class="btn btn-download" style="display:none;" onclick="downloadResult()">📥 СКАЧАТЬ РЕЗУЛЬТАТ АНАЛИЗА</button>
+    <div id="monitor">
+        <video id="video" autoplay muted playsinline style="display:none;"></video>
+        <canvas id="canvas" width="640" height="480"></canvas>
     </div>
 
-    <div class="side-panel">
-        <h3 style="margin:0; color:var(--p)">Журнал безопасности</h3>
-        <div id="log"></div>
-        <div style="font-size: 9px; color: #475569; margin-top: 20px; line-height: 1.5;">
-            Workflow: rZdoObCAWDIOKv3hrjaY<br>
-            Engine: Roboflow Inference API<br>
-            Threshold: 0.70 (Anti-Hat Filter)
-        </div>
+    <button class="btn" onclick="startCamera()">🎥 ЗАПУСТИТЬ МОНИТОРИНГ</button>
+
+    <div id="debug-console">
+        <div>[SYSTEM] Инициализация...</div>
     </div>
 </div>
 
 <script>
-    const API_KEY = "rf_LKryTgEjdCbkT8neRDfLFtdPHzj2"; 
-    const WORKFLOW_ID = "rZdoObCAWDIOKv3hrjaY"; 
+    const API_KEY = "rf_LKryTgEjdCbkT8neRDfLFtdPHzj2";
+    const logBox = document.getElementById('debug-console');
+    const errDisplay = document.getElementById('error-display');
 
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const logBox = document.getElementById('log');
-    const statusMsg = document.getElementById('status-msg');
-    const downloadBtn = document.getElementById('download-btn');
-
-    let model, isLive = false;
-
-    function addLog(msg, isAlert = false) {
-        const entry = document.createElement('div');
-        entry.className = 'log-entry';
-        if (isAlert) entry.classList.add('alert');
-        const time = new Date().toLocaleTimeString();
-        entry.innerHTML = `[${time}] ${msg}`;
-        logBox.prepend(entry);
+    function print(msg, isError = false) {
+        const d = document.createElement('div');
+        d.innerHTML = `> ${msg}`;
+        if (isError) d.style.color = "#ef4444";
+        logBox.appendChild(d);
+        logBox.scrollTop = logBox.scrollHeight;
     }
 
-    // 1. Инициализация ИИ
-    async function initSystem() {
+    async function initAI() {
+        print("Проверка протокола: " + window.location.protocol);
+        
+        if (window.location.protocol === 'file:') {
+            showFatalError("ОШИБКА: Вы запустили файл с диска. Залейте его на GitHub или используйте Live Server!");
+            return;
+        }
+
         try {
+            print("Авторизация в Roboflow...");
             roboflow.auth({ publishable_key: API_KEY });
-            model = await roboflow.load({
+            
+            print("Загрузка модели construction-site-safety/4...");
+            const model = await roboflow.load({
                 model: "construction-site-safety",
                 version: 4
             });
-            statusMsg.innerText = "СИСТЕМА ГОТОВА";
-            statusMsg.style.color = "#22c55e";
-            addLog("Нейросеть YOLOv8 загружена успешно.");
+
+            print("МОДЕЛЬ ЗАГРУЖЕНА УСПЕШНО!", false);
+            window.aiModel = model; // Сохраняем в глобальную переменную
         } catch (e) {
-            statusMsg.innerText = "ОШИБКА: ЗАПУСТИТЕ ЧЕРЕЗ GITHUB PAGES";
-            addLog("Ошибка доступа. Нужен HTTPS протокол (GitHub).", true);
+            console.error(e);
+            showFatalError("КРИТИЧЕСКАЯ ОШИБКА ИИ: " + e.message);
         }
     }
 
-    // 2. Видеопоток
+    function showFatalError(msg) {
+        errDisplay.innerText = msg;
+        errDisplay.style.display = "block";
+        print(msg, true);
+    }
+
     async function startCamera() {
-        if (!model) return;
-        isLive = true;
-        downloadBtn.style.display = "none";
-        video.style.display = "block";
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        video.srcObject = stream;
-        addLog("Запущен мониторинг в реальном времени.");
-        detectLive();
-    }
-
-    async function detectLive() {
-        if (!isLive) return;
-        const predictions = await model.detect(video);
-        render(predictions, video);
-        requestAnimationFrame(detectLive);
-    }
-
-    // 3. Анализ загруженного фото
-    function processImage(event) {
-        const file = event.target.files[0];
-        if (!file || !model) return;
-
-        isLive = false;
-        video.style.display = "none";
-        statusMsg.innerText = "АНАЛИЗ ОБЪЕКТА...";
-
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        img.onload = async () => {
-            ctx.clearRect(0, 0, 640, 480);
-            ctx.drawImage(img, 0, 0, 640, 480);
-            
-            const predictions = await model.detect(img);
-            render(predictions, img);
-            
-            addLog("Анализ фото завершен: " + file.name);
-            statusMsg.innerText = "АНАЛИЗ ЗАВЕРШЕН";
-            downloadBtn.style.display = "flex";
-        };
-    }
-
-    // 4. Отрисовка результатов (с фильтром уверенности)
-    function render(predictions, source) {
-        if (isLive) {
-            ctx.clearRect(0, 0, 640, 480);
-            ctx.drawImage(source, 0, 0, 640, 480);
+        if (!window.aiModel) {
+            alert("Нейросеть еще не загружена. Подождите...");
+            return;
         }
+        
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
 
-        const CONF_LIMIT = 0.70; // Тот самый фильтр против шапок
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+            video.style.display = "block";
+            print("Камера запущена.");
 
-        predictions.forEach(p => {
-            if (p.confidence > CONF_LIMIT) {
-                const label = p.class.toLowerCase();
-                const isViolation = label.includes("no-") || label === "person";
-                let color = isViolation ? "#ef4444" : "#22c55e";
-                
-                // Рамка
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 4;
-                ctx.strokeRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
+            const detect = async () => {
+                const predictions = await window.aiModel.detect(video);
+                ctx.clearRect(0, 0, 640, 480);
+                ctx.drawImage(video, 0, 0, 640, 480);
 
-                // Плашка
-                ctx.fillStyle = color;
-                ctx.fillRect(p.x - p.width/2, p.y - p.height/2 - 25, p.width, 25);
-                
-                ctx.fillStyle = "white";
-                ctx.font = "bold 15px Arial";
-                ctx.fillText(`${p.class.toUpperCase()} ${(p.confidence*100).toFixed(0)}%`, p.x - p.width/2 + 5, p.y - p.height/2 - 7);
-                
-                if (isViolation && Math.random() > 0.99) addLog("ВНИМАНИЕ: " + p.class, true);
-            }
-        });
+                predictions.forEach(p => {
+                    if (p.confidence > 0.6) {
+                        const color = p.class.includes("no-") ? "#ef4444" : "#22c55e";
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 4;
+                        ctx.strokeRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
+                        ctx.fillStyle = color;
+                        ctx.fillText(p.class.toUpperCase(), p.x - p.width/2, p.y - p.height/2 - 10);
+                    }
+                });
+                requestAnimationFrame(detect);
+            };
+            detect();
+        } catch (err) {
+            showFatalError("ОШИБКА КАМЕРЫ: " + err.message);
+        }
     }
 
-    // 5. Функция скачивания результата
-    function downloadResult() {
-        const link = document.createElement('a');
-        link.download = 'safe-guard-report.png';
-        link.href = canvas.toDataURL();
-        link.click();
-        addLog("Скриншот отчета сохранен.");
-    }
-
-    initSystem();
+    initAI();
 </script>
 </body>
 </html>

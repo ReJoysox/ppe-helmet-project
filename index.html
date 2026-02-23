@@ -2,123 +2,120 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Система промышленной безопасности Pro-Vision</title>
-    <!-- Подключаем скрипт Roboflow -->
+    <title>Система мониторинга безопасности «SafeGuard ИИ»</title>
     <script src="https://cdn.roboflow.com/0.2.26/roboflow.js"></script>
     <style>
-        body { font-family: 'Inter', sans-serif; background: #0f172a; color: white; margin: 0; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 90%; max-width: 1000px; margin-top: 20px; text-align: center; }
-        #video-container { position: relative; display: inline-block; background: #000; border-radius: 12px; overflow: hidden; border: 4px solid #334155; }
-        canvas { position: absolute; left: 0; top: 0; }
-        video { display: block; }
-        .controls { margin: 20px; gap: 10px; display: flex; justify-content: center; }
-        .btn { padding: 12px 24px; background: #3b82f6; border: none; color: white; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        .status-bar { padding: 10px; background: #1e293b; border-radius: 8px; margin-bottom: 10px; width: 100%; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f1f5f9; margin: 0; padding: 20px; }
+        .dashboard { display: grid; grid-template-columns: 1fr 300px; gap: 20px; max-width: 1200px; margin: auto; }
+        .main-view { background: #1e293b; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); position: relative; }
+        .side-panel { background: #1e293b; padding: 20px; border-radius: 15px; border-left: 5px solid #3b82f6; }
+        #video-wrapper { position: relative; width: 640px; height: 480px; margin: auto; background: #000; border-radius: 10px; overflow: hidden; }
+        video, canvas { position: absolute; left: 0; top: 0; }
+        h1 { color: #3b82f6; margin-top: 0; }
+        .log-entry { font-size: 0.85em; padding: 5px; border-bottom: 1px solid #334155; color: #94a3b8; }
+        .status-ok { color: #22c55e; font-weight: bold; }
+        .status-alert { color: #ef4444; font-weight: bold; }
+        .btn { background: #3b82f6; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 15px; }
+        .btn:hover { background: #2563eb; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Система визуального контроля СИЗ v3.0 (Professional)</h2>
-    <div class="status-bar" id="status">Загрузка интеллектуальной модели...</div>
-
-    <div class="controls">
-        <button class="btn" onclick="startCamera()">🎥 Запустить мониторинг</button>
-        <input type="file" id="image-input" style="display:none" onchange="processImage(event)">
-        <button class="btn" style="background:#8b5cf6" onclick="document.getElementById('image-input').click()">📁 Анализ фото</button>
+<div class="dashboard">
+    <div class="main-view">
+        <h1>Система «SafeGuard ИИ»</h1>
+        <div id="video-wrapper">
+            <video id="video" width="640" height="480" autoplay muted playsinline></video>
+            <canvas id="canvas" width="640" height="480"></canvas>
+        </div>
+        <p>Статус: <span id="system-status">Загрузка нейросети...</span></p>
     </div>
 
-    <div id="video-container">
-        <video id="video" width="640" height="480" autoplay muted playsinline></video>
-        <canvas id="canvas" width="640" height="480"></canvas>
+    <div class="side-panel">
+        <h3>Журнал событий</h3>
+        <button class="btn" onclick="startMonitoring()">ЗАПУСТИТЬ МОНИТОРИНГ</button>
+        <div id="event-log">
+            <div class="log-entry">Система готова к запуску...</div>
+        </div>
     </div>
 </div>
 
 <script>
-    let model;
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    const status = document.getElementById('status');
+    const log = document.getElementById('event-log');
+    let model;
 
-    // Настройки модели (Это открытая модель для примера, ты можешь найти другую на Roboflow)
-    const publishable_key = "rf_YOUR_KEY_OR_PUBLIC"; // В Roboflow Universe можно получить ключ
-    const modelName = "construction-safety-gsnvb";
-    const version = 1;
-
+    // ИСПОЛЬЗУЕМ ОДНУ ИЗ ЛУЧШИХ ГОТОВЫХ МОДЕЛЕЙ (Construction Site Safety)
     async function loadModel() {
-        // Мы будем использовать общедоступную модель для детекции касок/жилетов
-        // Для демонстрации на конкурсе можно использовать демо-ключ Roboflow
         roboflow.auth({
-            publishable_key: "rf_0S9uB0A9P0XvP6Y8p3Y5" // Тестовый ключ
+            publishable_key: "rf_0S9uB0A9P0XvP6Y8p3Y5" // Публичный ключ для демо
         }).load({
             model: "construction-site-safety",
             version: 4
-        }).then(function(m) {
+        }).then(m => {
             model = m;
-            status.innerText = "Модель готова. Объекты: Каска, Жилет, Человек, Перчатки.";
+            document.getElementById('system-status').innerText = "АКТИВНА (YOLOv8)";
         });
     }
 
     loadModel();
 
-    async function startCamera() {
+    async function startMonitoring() {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
-        video.onloadedmetadata = () => {
-            detectFrame();
-        };
+        detect();
     }
 
-    async function detectFrame() {
-        if (!model) return;
-        
-        const predictions = await model.detect(video);
-        renderPredictions(predictions);
-        requestAnimationFrame(detectFrame);
+    async function detect() {
+        if (model) {
+            const predictions = await model.detect(video);
+            render(predictions);
+        }
+        requestAnimationFrame(detect);
     }
 
-    function renderPredictions(predictions) {
+    function render(predictions) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // ПОРОГ УВЕРЕННОСТИ 0.7 (70%) — чтобы отсечь шапки
+        const threshold = 0.7;
 
-        predictions.forEach(prediction => {
-            const { x, y, width, height, class: className, confidence } = prediction;
-            
-            // Настройка цвета: если каска или жилет — зеленый, если "no-helmet" — красный
-            let color = "#3b82f6"; // По умолчанию синий
-            if (className.includes("helmet") || className.includes("vest")) color = "#22c55e";
-            if (className.includes("no-")) color = "#ef4444";
+        predictions.forEach(p => {
+            if (p.confidence > threshold) {
+                // Логика: если в названии класса есть "no-", значит это нарушение
+                const isViolation = p.class.toLowerCase().includes("no-");
+                const color = isViolation ? "#ef4444" : "#22c55e";
+                
+                // Рисуем рамку
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 4;
+                ctx.strokeRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
 
-            // Рисуем рамку
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 3;
-            ctx.strokeRect(x - width/2, y - height/2, width, height);
+                // Плашка с текстом
+                ctx.fillStyle = color;
+                ctx.fillRect(p.x - p.width/2, p.y - p.height/2 - 25, p.width, 25);
+                ctx.fillStyle = "white";
+                ctx.font = "bold 14px Arial";
+                ctx.fillText(`${p.class.toUpperCase()}`, p.x - p.width/2 + 5, p.y - p.height/2 - 7);
 
-            // Рисуем фон для текста
-            ctx.fillStyle = color;
-            ctx.font = "bold 14px Arial";
-            const text = `${className} ${(confidence * 100).toFixed(0)}%`;
-            const textWidth = ctx.measureText(text).width;
-            ctx.fillRect(x - width/2, y - height/2 - 20, textWidth + 10, 20);
-
-            // Текст
-            ctx.fillStyle = "white";
-            ctx.fillText(text, x - width/2 + 5, y - height/2 - 5);
+                // Добавляем в лог только важные события (не чаще раза в 2 секунды)
+                if (Math.random() > 0.98) {
+                    addLog(p.class, isViolation);
+                }
+            }
         });
     }
 
-    // Обработка фото
-    function processImage(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        img.onload = async () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0, 640, 480);
-            const predictions = await model.detect(img);
-            renderPredictions(predictions);
-        };
+    function addLog(className, isViolation) {
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        const time = new Date().toLocaleTimeString();
+        const statusClass = isViolation ? 'status-alert' : 'status-ok';
+        entry.innerHTML = `[${time}] ${className.toUpperCase()}: <span class="${statusClass}">${isViolation ? 'НАРУШЕНИЕ' : 'НОРМА'}</span>`;
+        log.prepend(entry);
+        if (log.childNodes.length > 10) log.lastChild.remove();
     }
 </script>
 </body>

@@ -2,67 +2,198 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Система мониторинга безопасности «SafeGuard ИИ»</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeGuard ИИ | Система мониторинга СИЗ</title>
+    
+    <!-- Библиотека Roboflow для работы с YOLOv8 -->
     <script src="https://cdn.roboflow.com/0.2.26/roboflow.js"></script>
+    
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f1f5f9; margin: 0; padding: 20px; }
-        .dashboard { display: grid; grid-template-columns: 1fr 300px; gap: 20px; max-width: 1200px; margin: auto; }
-        .main-view { background: #1e293b; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center; }
-        .side-panel { background: #1e293b; padding: 20px; border-radius: 15px; border-left: 5px solid #3b82f6; height: 600px; display: flex; flex-direction: column; }
-        
-        #display-container { 
-            position: relative; 
-            width: 640px; 
-            height: 480px; 
-            margin: 20px auto; 
-            background: #000; 
-            border-radius: 10px; 
-            overflow: hidden; 
+        :root {
+            --bg-dark: #0f172a;
+            --card-bg: #1e293b;
+            --primary: #3b82f6;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --text-main: #f1f5f9;
+            --text-dim: #94a3b8;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 20px;
+            max-width: 1100px;
+            width: 95%;
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        /* ЛЕВАЯ ПАНЕЛЬ: МОНИТОР */
+        .monitor-section {
+            text-align: center;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.8rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .status-badge {
+            font-size: 0.9rem;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: #334155;
+            color: var(--text-dim);
+        }
+
+        #display-wrapper {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            margin: 20px auto;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
             border: 2px solid #334155;
         }
-        video, canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; }
-        
-        h1 { color: #3b82f6; margin: 0; font-size: 1.8em; }
-        .controls { display: flex; gap: 10px; margin-top: 15px; justify-content: center; }
-        
-        .btn { background: #3b82f6; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        .btn:hover { background: #2563eb; transform: translateY(-2px); }
-        .btn-upload { background: #8b5cf6; }
-        .btn-upload:hover { background: #7c3aed; }
-        
-        #event-log { flex-grow: 1; overflow-y: auto; margin-top: 15px; border-top: 1px solid #334155; }
-        .log-entry { font-size: 0.8em; padding: 8px 0; border-bottom: 1px solid #334155; color: #94a3b8; text-align: left; }
-        .status-ok { color: #22c55e; font-weight: bold; }
-        .status-alert { color: #ef4444; font-weight: bold; }
-        
+
+        video, canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* ИНДИКАТОР ЗАГРУЗКИ */
+        #loader-block {
+            margin: 20px auto;
+            max-width: 400px;
+        }
+        .progress-container {
+            width: 100%;
+            background: #334155;
+            height: 8px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        #progress-bar {
+            width: 0%;
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.3s;
+        }
+
+        /* КНОПКИ */
+        .controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn:hover { opacity: 0.9; transform: translateY(-2px); }
+        .btn-alt { background: #8b5cf6; }
+
+        /* ПРАВАЯ ПАНЕЛЬ: ЛОГИ */
+        .side-panel {
+            background: #0f172a80;
+            border-radius: 12px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #334155;
+        }
+        .log-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            margin-top: 10px;
+        }
+        .log-entry {
+            padding: 8px 0;
+            border-bottom: 1px solid #1e293b;
+            color: var(--text-dim);
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .alert { color: var(--danger); font-weight: bold; }
+        .ok { color: var(--success); font-weight: bold; }
+
+        .hidden { display: none !important; }
         input[type="file"] { display: none; }
-        #system-status { font-weight: bold; color: #38bdf8; }
     </style>
 </head>
 <body>
 
 <div class="dashboard">
-    <div class="main-view">
-        <h1>SafeGuard ИИ <small style="font-size: 0.5em; color: #64748b;">v5.0 Pro</small></h1>
-        <div class="controls">
-            <button class="btn" onclick="startCamera()">🎥 ЖИВОЙ ЭФИР</button>
-            <label class="btn btn-upload">
-                📁 АНАЛИЗ ФОТО
-                <input type="file" id="image-input" accept="image/*" onchange="processImage(event)">
-            </label>
+    <!-- СЕКЦИЯ МОНИТОРА -->
+    <div class="monitor-section">
+        <h1>🛡️ SafeGuard ИИ <span class="status-badge" id="sys-status">Инициализация...</span></h1>
+        
+        <div id="loader-block">
+            <span style="font-size: 0.8rem; color: var(--text-dim);" id="loader-text">Загрузка нейросети YOLOv8...</span>
+            <div class="progress-container">
+                <div id="progress-bar"></div>
+            </div>
         </div>
 
-        <div id="display-container">
+        <div id="display-wrapper">
             <video id="video" width="640" height="480" autoplay muted playsinline style="display:none;"></video>
             <canvas id="canvas" width="640" height="480"></canvas>
         </div>
-        <p>Статус: <span id="system-status">Загрузка нейросети...</span></p>
+
+        <div class="controls">
+            <button class="btn" onclick="startCamera()">🎥 ЖИВОЙ ЭФИР</button>
+            <label class="btn btn-alt">
+                📁 АНАЛИЗ ФОТО
+                <input type="file" onchange="processImage(event)">
+            </label>
+        </div>
     </div>
 
+    <!-- СЕКЦИЯ ЖУРНАЛА -->
     <div class="side-panel">
-        <h3>Журнал событий</h3>
-        <div id="event-log">
-            <div class="log-entry">Инициализация модулей ИИ...</div>
+        <h3 style="margin: 0; color: var(--primary);">Журнал событий</h3>
+        <div class="log-container" id="log">
+            <div class="log-entry">Ожидание запуска системы...</div>
+        </div>
+        <div style="font-size: 0.7rem; color: #475569; margin-top: 10px;">
+            Версия: 5.0 Pro (YOLOv8)<br>Порог уверенности: 70%
         </div>
     </div>
 </div>
@@ -71,115 +202,127 @@
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    const log = document.getElementById('event-log');
-    const statusText = document.getElementById('system-status');
-    let model;
+    const log = document.getElementById('log');
+    const progressBar = document.getElementById('progress-bar');
+    const sysStatus = document.getElementById('sys-status');
+    let model = null;
     let isLive = false;
 
-    // Загрузка профессиональной модели YOLOv8
+    // 1. ЗАГРУЗКА МОДЕЛИ
     async function loadModel() {
+        let progress = 0;
+        const timer = setInterval(() => {
+            if(progress < 90) {
+                progress += Math.random() * 15;
+                progressBar.style.width = progress + "%";
+            }
+        }, 500);
+
         roboflow.auth({
-            publishable_key: "rf_0S9uB0A9P0XvP6Y8p3Y5" 
+            publishable_key: "rf_0S9uB0A9P0XvP6Y8p3Y5" // Демо-ключ
         }).load({
             model: "construction-site-safety",
             version: 4
         }).then(m => {
+            clearInterval(timer);
             model = m;
-            statusText.innerText = "СИСТЕМА ГОТОВА";
-            addLog("Нейросеть YOLOv8 загружена успешно", false);
+            progressBar.style.width = "100%";
+            setTimeout(() => {
+                document.getElementById('loader-block').classList.add('hidden');
+                sysStatus.innerText = "ГОТОВ";
+                sysStatus.style.color = "#22c55e";
+                addLog("Система ИИ активирована", "ok");
+            }, 500);
         });
     }
     loadModel();
 
-    // --- РЕЖИМ 1: ВИДЕОПОТОК ---
+    // 2. РАБОТА С КАМЕРОЙ
     async function startCamera() {
-        if (!model) return;
+        if(!model) return;
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
         video.style.display = "block";
         isLive = true;
-        statusText.innerText = "МОНИТОРИНГ В РЕАЛЬНОМ ВРЕМЕНИ";
+        sysStatus.innerText = "LIVE";
         detectVideo();
     }
 
     async function detectVideo() {
-        if (!isLive) return;
-        if (model) {
-            const predictions = await model.detect(video);
-            render(predictions, video);
-        }
+        if(!isLive) return;
+        const predictions = await model.detect(video);
+        render(predictions, video);
         requestAnimationFrame(detectVideo);
     }
 
-    // --- РЕЖИМ 2: АНАЛИЗ ФОТО ---
+    // 3. АНАЛИЗ ЗАГРУЖЕННОГО ФОТО
     function processImage(event) {
         const file = event.target.files[0];
-        if (!file || !model) return;
+        if(!file || !model) return;
 
-        isLive = false; // Останавливаем камеру
+        isLive = false;
         video.style.display = "none";
-        statusText.innerText = "АНАЛИЗ ЗАГРУЖЕННОГО ОБЪЕКТА";
+        sysStatus.innerText = "АНАЛИЗ ФОТО";
 
         const img = new Image();
         img.src = URL.createObjectURL(file);
         img.onload = async () => {
-            // Рисуем фото на холст
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            
-            // Запускаем детекцию на статичном изображении
             const predictions = await model.detect(img);
             render(predictions, img);
-            addLog("Завершен анализ файла: " + file.name, false);
+            addLog("Анализ файла завершен", "ok");
         };
     }
 
-    // --- ОБЩАЯ ОТРИСОВКА (Confidence 0.7) ---
+    // 4. ОТРИСОВКА И ЛОГИКА (ПОРОГ 70%)
     function render(predictions, source) {
-        // Если это видео, сначала рисуем кадр видео, потом рамки
-        if (isLive) {
+        if(isLive) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
         }
 
-        const threshold = 0.7; // Порог для отсечения шапок и шума
+        const CONFIDENCE_THRESHOLD = 0.7; // Отсекаем шапки и ложные срабатывания
 
         predictions.forEach(p => {
-            if (p.confidence > threshold) {
-                const isViolation = p.class.toLowerCase().includes("no-") || p.class.toLowerCase().includes("person");
-                // "person" часто помечается как нарушение, если нет каски в этой модели
+            if(p.confidence > CONFIDENCE_THRESHOLD) {
+                const className = p.class.toLowerCase();
+                const isViolation = className.includes("no-") || className === "person";
                 
-                let color = "#22c55e"; // Зеленый (Норма)
-                if (p.class.toLowerCase().includes("no-")) color = "#ef4444"; // Красный (Нарушение)
-                if (p.class === "person") color = "#3b82f6"; // Синий (Просто человек)
+                let color = "#22c55e"; // Зеленый
+                if(className.includes("no-")) color = "#ef4444"; // Красный
+                if(className === "person") color = "#3b82f6";    // Синий
 
-                // Рамка
+                // Отрисовка рамки
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 4;
                 ctx.strokeRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
 
-                // Плашка
+                // Отрисовка подписи
                 ctx.fillStyle = color;
-                ctx.fillRect(p.x - p.width/2, p.y - p.height/2 - 25, p.width, 25);
-                
-                ctx.fillStyle = "white";
                 ctx.font = "bold 14px Arial";
-                ctx.fillText(`${p.class.toUpperCase()} ${(p.confidence*100).toFixed(0)}%`, p.x - p.width/2 + 5, p.y - p.height/2 - 7);
+                const label = `${p.class.toUpperCase()} ${(p.confidence*100).toFixed(0)}%`;
+                const textWidth = ctx.measureText(label).width;
+                
+                ctx.fillRect(p.x - p.width/2, p.y - p.height/2 - 25, textWidth + 10, 25);
+                ctx.fillStyle = "white";
+                ctx.fillText(label, p.x - p.width/2 + 5, p.y - p.height/2 - 7);
 
-                // Редкое логирование для истории
-                if (Math.random() > 0.99) addLog(`Обнаружен ${p.class}`, isViolation);
+                // Логирование критических событий (выборочно)
+                if(Math.random() > 0.99) {
+                    addLog(`Обнаружен: ${p.class}`, isViolation ? "alert" : "ok");
+                }
             }
         });
     }
 
-    function addLog(message, isAlert) {
+    function addLog(msg, type) {
         const entry = document.createElement('div');
         entry.className = 'log-entry';
         const time = new Date().toLocaleTimeString();
-        const statusClass = isAlert ? 'status-alert' : 'status-ok';
-        entry.innerHTML = `[${time}] <span class="${statusClass}">${message.toUpperCase()}</span>`;
+        entry.innerHTML = `[${time}] <span class="${type}">${msg.toUpperCase()}</span>`;
         log.prepend(entry);
-        if (log.childNodes.length > 20) log.lastChild.remove();
+        if(log.childNodes.length > 15) log.lastChild.remove();
     }
 </script>
 </body>

@@ -7,25 +7,53 @@
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f1f5f9; margin: 0; padding: 20px; }
         .dashboard { display: grid; grid-template-columns: 1fr 300px; gap: 20px; max-width: 1200px; margin: auto; }
-        .main-view { background: #1e293b; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); position: relative; }
-        .side-panel { background: #1e293b; padding: 20px; border-radius: 15px; border-left: 5px solid #3b82f6; }
-        #video-wrapper { position: relative; width: 640px; height: 480px; margin: auto; background: #000; border-radius: 10px; overflow: hidden; }
-        video, canvas { position: absolute; left: 0; top: 0; }
-        h1 { color: #3b82f6; margin-top: 0; }
-        .log-entry { font-size: 0.85em; padding: 5px; border-bottom: 1px solid #334155; color: #94a3b8; }
+        .main-view { background: #1e293b; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center; }
+        .side-panel { background: #1e293b; padding: 20px; border-radius: 15px; border-left: 5px solid #3b82f6; height: 600px; display: flex; flex-direction: column; }
+        
+        #display-container { 
+            position: relative; 
+            width: 640px; 
+            height: 480px; 
+            margin: 20px auto; 
+            background: #000; 
+            border-radius: 10px; 
+            overflow: hidden; 
+            border: 2px solid #334155;
+        }
+        video, canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; }
+        
+        h1 { color: #3b82f6; margin: 0; font-size: 1.8em; }
+        .controls { display: flex; gap: 10px; margin-top: 15px; justify-content: center; }
+        
+        .btn { background: #3b82f6; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn:hover { background: #2563eb; transform: translateY(-2px); }
+        .btn-upload { background: #8b5cf6; }
+        .btn-upload:hover { background: #7c3aed; }
+        
+        #event-log { flex-grow: 1; overflow-y: auto; margin-top: 15px; border-top: 1px solid #334155; }
+        .log-entry { font-size: 0.8em; padding: 8px 0; border-bottom: 1px solid #334155; color: #94a3b8; text-align: left; }
         .status-ok { color: #22c55e; font-weight: bold; }
         .status-alert { color: #ef4444; font-weight: bold; }
-        .btn { background: #3b82f6; color: white; border: none; padding: 12px 25px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 15px; }
-        .btn:hover { background: #2563eb; }
+        
+        input[type="file"] { display: none; }
+        #system-status { font-weight: bold; color: #38bdf8; }
     </style>
 </head>
 <body>
 
 <div class="dashboard">
     <div class="main-view">
-        <h1>Система «SafeGuard ИИ»</h1>
-        <div id="video-wrapper">
-            <video id="video" width="640" height="480" autoplay muted playsinline></video>
+        <h1>SafeGuard ИИ <small style="font-size: 0.5em; color: #64748b;">v5.0 Pro</small></h1>
+        <div class="controls">
+            <button class="btn" onclick="startCamera()">🎥 ЖИВОЙ ЭФИР</button>
+            <label class="btn btn-upload">
+                📁 АНАЛИЗ ФОТО
+                <input type="file" id="image-input" accept="image/*" onchange="processImage(event)">
+            </label>
+        </div>
+
+        <div id="display-container">
+            <video id="video" width="640" height="480" autoplay muted playsinline style="display:none;"></video>
             <canvas id="canvas" width="640" height="480"></canvas>
         </div>
         <p>Статус: <span id="system-status">Загрузка нейросети...</span></p>
@@ -33,9 +61,8 @@
 
     <div class="side-panel">
         <h3>Журнал событий</h3>
-        <button class="btn" onclick="startMonitoring()">ЗАПУСТИТЬ МОНИТОРИНГ</button>
         <div id="event-log">
-            <div class="log-entry">Система готова к запуску...</div>
+            <div class="log-entry">Инициализация модулей ИИ...</div>
         </div>
     </div>
 </div>
@@ -45,77 +72,114 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     const log = document.getElementById('event-log');
+    const statusText = document.getElementById('system-status');
     let model;
+    let isLive = false;
 
-    // ИСПОЛЬЗУЕМ ОДНУ ИЗ ЛУЧШИХ ГОТОВЫХ МОДЕЛЕЙ (Construction Site Safety)
+    // Загрузка профессиональной модели YOLOv8
     async function loadModel() {
         roboflow.auth({
-            publishable_key: "rf_0S9uB0A9P0XvP6Y8p3Y5" // Публичный ключ для демо
+            publishable_key: "rf_0S9uB0A9P0XvP6Y8p3Y5" 
         }).load({
             model: "construction-site-safety",
             version: 4
         }).then(m => {
             model = m;
-            document.getElementById('system-status').innerText = "АКТИВНА (YOLOv8)";
+            statusText.innerText = "СИСТЕМА ГОТОВА";
+            addLog("Нейросеть YOLOv8 загружена успешно", false);
         });
     }
-
     loadModel();
 
-    async function startMonitoring() {
+    // --- РЕЖИМ 1: ВИДЕОПОТОК ---
+    async function startCamera() {
+        if (!model) return;
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
-        detect();
+        video.style.display = "block";
+        isLive = true;
+        statusText.innerText = "МОНИТОРИНГ В РЕАЛЬНОМ ВРЕМЕНИ";
+        detectVideo();
     }
 
-    async function detect() {
+    async function detectVideo() {
+        if (!isLive) return;
         if (model) {
             const predictions = await model.detect(video);
-            render(predictions);
+            render(predictions, video);
         }
-        requestAnimationFrame(detect);
+        requestAnimationFrame(detectVideo);
     }
 
-    function render(predictions) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // ПОРОГ УВЕРЕННОСТИ 0.7 (70%) — чтобы отсечь шапки
-        const threshold = 0.7;
+    // --- РЕЖИМ 2: АНАЛИЗ ФОТО ---
+    function processImage(event) {
+        const file = event.target.files[0];
+        if (!file || !model) return;
+
+        isLive = false; // Останавливаем камеру
+        video.style.display = "none";
+        statusText.innerText = "АНАЛИЗ ЗАГРУЖЕННОГО ОБЪЕКТА";
+
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        img.onload = async () => {
+            // Рисуем фото на холст
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            // Запускаем детекцию на статичном изображении
+            const predictions = await model.detect(img);
+            render(predictions, img);
+            addLog("Завершен анализ файла: " + file.name, false);
+        };
+    }
+
+    // --- ОБЩАЯ ОТРИСОВКА (Confidence 0.7) ---
+    function render(predictions, source) {
+        // Если это видео, сначала рисуем кадр видео, потом рамки
+        if (isLive) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+        }
+
+        const threshold = 0.7; // Порог для отсечения шапок и шума
 
         predictions.forEach(p => {
             if (p.confidence > threshold) {
-                // Логика: если в названии класса есть "no-", значит это нарушение
-                const isViolation = p.class.toLowerCase().includes("no-");
-                const color = isViolation ? "#ef4444" : "#22c55e";
+                const isViolation = p.class.toLowerCase().includes("no-") || p.class.toLowerCase().includes("person");
+                // "person" часто помечается как нарушение, если нет каски в этой модели
                 
-                // Рисуем рамку
+                let color = "#22c55e"; // Зеленый (Норма)
+                if (p.class.toLowerCase().includes("no-")) color = "#ef4444"; // Красный (Нарушение)
+                if (p.class === "person") color = "#3b82f6"; // Синий (Просто человек)
+
+                // Рамка
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 4;
                 ctx.strokeRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
 
-                // Плашка с текстом
+                // Плашка
                 ctx.fillStyle = color;
                 ctx.fillRect(p.x - p.width/2, p.y - p.height/2 - 25, p.width, 25);
+                
                 ctx.fillStyle = "white";
                 ctx.font = "bold 14px Arial";
-                ctx.fillText(`${p.class.toUpperCase()}`, p.x - p.width/2 + 5, p.y - p.height/2 - 7);
+                ctx.fillText(`${p.class.toUpperCase()} ${(p.confidence*100).toFixed(0)}%`, p.x - p.width/2 + 5, p.y - p.height/2 - 7);
 
-                // Добавляем в лог только важные события (не чаще раза в 2 секунды)
-                if (Math.random() > 0.98) {
-                    addLog(p.class, isViolation);
-                }
+                // Редкое логирование для истории
+                if (Math.random() > 0.99) addLog(`Обнаружен ${p.class}`, isViolation);
             }
         });
     }
 
-    function addLog(className, isViolation) {
+    function addLog(message, isAlert) {
         const entry = document.createElement('div');
         entry.className = 'log-entry';
         const time = new Date().toLocaleTimeString();
-        const statusClass = isViolation ? 'status-alert' : 'status-ok';
-        entry.innerHTML = `[${time}] ${className.toUpperCase()}: <span class="${statusClass}">${isViolation ? 'НАРУШЕНИЕ' : 'НОРМА'}</span>`;
+        const statusClass = isAlert ? 'status-alert' : 'status-ok';
+        entry.innerHTML = `[${time}] <span class="${statusClass}">${message.toUpperCase()}</span>`;
         log.prepend(entry);
-        if (log.childNodes.length > 10) log.lastChild.remove();
+        if (log.childNodes.length > 20) log.lastChild.remove();
     }
 </script>
 </body>

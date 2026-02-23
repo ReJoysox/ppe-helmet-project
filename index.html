@@ -2,53 +2,281 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>SafeGuard ИИ | Система мониторинга СИЗ</title>
+    <title>SafeGuard ИИ | YOLOv8 Мониторинг</title>
+    <!-- Подключаем ядро YOLOv8 для браузера -->
     <script src="https://cdn.roboflow.com/0.2.26/roboflow.js"></script>
     <style>
-        :root { --bg: #0f172a; --card: #1e293b; --primary: #3b82f6; --text: #f1f5f9; }
-        body { font-family: sans-serif; background: var(--bg); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .dashboard { background: var(--card); padding: 30px; border-radius: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); width: 95%; max-width: 1000px; display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
-        h1 { color: var(--primary); margin: 0 0 20px 0; font-size: 1.5rem; }
-        #display-wrapper { position: relative; width: 640px; height: 480px; background: #000; border-radius: 12px; overflow: hidden; border: 2px solid #334155; }
-        video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; }
-        .controls { margin-top: 20px; display: flex; gap: 10px; }
-        .btn { background: var(--primary); color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; flex: 1; }
-        .btn-alt { background: #8b5cf6; }
-        .side-panel { background: #0f172a80; border-radius: 12px; padding: 15px; font-size: 0.8rem; display: flex; flex-direction: column; }
-        #log { flex-grow: 1; overflow-y: auto; margin-top: 10px; color: #94a3b8; }
-        .loader { width: 100%; height: 6px; background: #334155; border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
-        #progress { width: 0%; height: 100%; background: var(--primary); transition: width 0.3s; }
+        :root { 
+            --primary: #3b82f6; 
+            --danger: #ef4444; 
+            --success: #22c55e; 
+            --bg: #0f172a; 
+            --card: #1e293b; 
+        }
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            background: var(--bg); 
+            color: white; 
+            margin: 0; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            min-height: 100vh;
+        }
+        .dashboard {
+            background: var(--card);
+            padding: 30px;
+            border-radius: 24px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            width: 95%;
+            max-width: 1100px;
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 25px;
+        }
+        .main-panel h1 { 
+            margin: 0 0 20px 0; 
+            color: var(--primary); 
+            font-size: 1.8rem;
+        }
+        #monitor-box {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            border: 3px solid #334155;
+            margin: 0 auto;
+        }
+        video, canvas { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            object-fit: contain; 
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+            color: white;
+            background: var(--primary);
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(59,130,246,0.4); }
+        .btn-upload { background: #8b5cf6; }
+        
+        /* Стили журнала событий */
+        .side-panel {
+            background: #0f172a80;
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #334155;
+        }
+        #log {
+            flex-grow: 1;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            text-align: left;
+            margin-top: 15px;
+        }
+        .log-item { border-bottom: 1px solid #1e293b; padding: 5px 0; }
+        .status-tag { 
+            font-size: 0.7rem; 
+            padding: 3px 8px; 
+            border-radius: 10px; 
+            background: #334155; 
+            color: var(--primary); 
+            font-weight: bold;
+        }
         input[type="file"] { display: none; }
+
+        /* Загрузчик */
+        #loading-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        .progress-bar { width: 200px; height: 6px; background: #334155; border-radius: 10px; margin-top: 10px; overflow: hidden; }
+        #fill { width: 0%; height: 100%; background: var(--primary); transition: 0.3s; }
     </style>
 </head>
 <body>
 
 <div class="dashboard">
-    <div class="main">
-        <h1>🛡️ SafeGuard ИИ v5.0</h1>
+    <div class="main-panel">
+        <h1>🛡️ SafeGuard ИИ <span class="status-tag">YOLOv8 Pro</span></h1>
         
-        <div id="loading-area">
-            <div id="status-text">Загрузка модели YOLOv8...</div>
-            <div class="loader"><div id="progress"></div></div>
-        </div>
-
-        <div id="display-wrapper">
+        <div id="monitor-box">
+            <!-- Индикатор загрузки внутри монитора -->
+            <div id="loading-overlay">
+                <div id="load-text">Инициализация YOLOv8...</div>
+                <div class="progress-bar"><div id="fill"></div></div>
+            </div>
             <video id="video" autoplay muted playsinline style="display:none;"></video>
-            <canvas id="canvas"></canvas>
+            <canvas id="canvas" width="640" height="480"></canvas>
         </div>
 
         <div class="controls">
-            <button class="btn" onclick="startCamera()">🎥 КАМЕРА</button>
-            <label class="btn btn-alt">📁 ФОТО <input type="file" onchange="processImage(event)"></label>
+            <button class="btn" onclick="startCamera()">🎥 ЖИВОЙ ЭФИР</button>
+            <label class="btn btn-upload">
+                📁 АНАЛИЗ ФОТО
+                <input type="file" accept="image/*" onchange="processImage(event)">
+            </label>
         </div>
     </div>
 
     <div class="side-panel">
-        <strong>Журнал системы:</strong>
+        <h3 style="margin:0">Журнал событий</h3>
         <div id="log"></div>
+        <div style="font-size: 0.7rem; color: #475569; margin-top: 15px;">
+            Архитектура: YOLOv8 (Object Detection)<br>
+            Контекст: Промышленная безопасность
+        </div>
     </div>
 </div>
 
-<script src="script.js"></script>
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const log = document.getElementById('log');
+    const fill = document.getElementById('fill');
+    const loadOverlay = document.getElementById('loading-overlay');
+
+    let model = null;
+    let isLive = false;
+
+    // 1. ЗАГРУЗКА ПРОФЕССИОНАЛЬНОЙ МОДЕЛИ YOLOv8
+    async function initAI() {
+        addLog("Подключение к ядру YOLOv8...");
+        
+        // Фейковый прогресс для красоты
+        let p = 0;
+        const interval = setInterval(() => {
+            if (p < 90) { p += 10; fill.style.width = p + "%"; }
+        }, 300);
+
+        try {
+            roboflow.auth({
+                publishable_key: "rf_0S9uB0A9P0XvP6Y8p3Y5" // Стабильный ключ
+            }).load({
+                model: "construction-site-safety",
+                version: 4
+            }).then(m => {
+                clearInterval(interval);
+                model = m;
+                fill.style.width = "100%";
+                addLog("Модель YOLOv8 загружена успешно!");
+                setTimeout(() => loadOverlay.style.display = "none", 500);
+            });
+        } catch (e) {
+            addLog("Ошибка сети. Проверьте HTTPS соединение.");
+        }
+    }
+
+    initAI();
+
+    // 2. РЕЖИМ КАМЕРЫ
+    async function startCamera() {
+        if (!model) return;
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        video.style.display = "block";
+        isLive = true;
+        addLog("Запущен мониторинг видеопотока.");
+        detectFrame();
+    }
+
+    async function detectFrame() {
+        if (!isLive) return;
+        const predictions = await model.detect(video);
+        render(predictions, video);
+        requestAnimationFrame(detectFrame);
+    }
+
+    // 3. АНАЛИЗ ФОТО
+    function processImage(event) {
+        const file = event.target.files[0];
+        if (!file || !model) return;
+        isLive = false;
+        video.style.display = "none";
+        
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        img.onload = async () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, 640, 480);
+            const predictions = await model.detect(img);
+            render(predictions, img);
+            addLog("Анализ фото: " + file.name);
+        };
+    }
+
+    // 4. УМНАЯ ОТРИСОВКА (ПОРОГ 70%)
+    function render(predictions, source) {
+        if (isLive) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+        }
+
+        const CONFIDENCE_THRESHOLD = 0.7; // Отсекаем шапки и ложные срабатывания
+
+        predictions.forEach(p => {
+            if (p.confidence > CONFIDENCE_THRESHOLD) {
+                const label = p.class.toLowerCase();
+                
+                // Логика нарушений
+                const isViolation = label.includes("no-") || label === "person";
+                let color = isViolation ? "#ef4444" : "#22c55e";
+                
+                // Если просто человек, выделим синим
+                if (label === "person") color = "#3b82f6";
+
+                // Рисуем рамку
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 4;
+                ctx.strokeRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
+
+                // Рисуем плашку
+                ctx.fillStyle = color;
+                ctx.fillRect(p.x - p.width/2, p.y - p.height/2 - 25, p.width, 25);
+                
+                ctx.fillStyle = "white";
+                ctx.font = "bold 14px Arial";
+                ctx.fillText(`${p.class.toUpperCase()} ${(p.confidence*100).toFixed(0)}%`, p.x - p.width/2 + 5, p.y - p.height/2 - 7);
+                
+                // Редкое логирование для журнала
+                if (Math.random() > 0.99) addLog("Найдено: " + p.class);
+            }
+        });
+    }
+
+    function addLog(msg) {
+        const div = document.createElement('div');
+        div.className = 'log-item';
+        div.innerHTML = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        log.prepend(div);
+        if (log.childNodes.length > 15) log.lastChild.remove();
+    }
+</script>
 </body>
 </html>

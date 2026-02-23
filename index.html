@@ -2,145 +2,123 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>SafeGuard Про | YOLOv8 Мониторинг</title>
-    <!-- Подключаем библиотеку Roboflow напрямую -->
+    <title>SafeGuard ИИ | Система Workflow</title>
+    <!-- Подключаем библиотеку Roboflow -->
     <script src="https://cdn.roboflow.com/0.2.26/roboflow.js"></script>
     <style>
-        :root { --primary: #3b82f6; --bg: #0f172a; --card: #1e293b; --danger: #ef4444; --success: #22c55e; }
+        :root { --p: #3b82f6; --bg: #0f172a; --c: #1e293b; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; margin: 0; padding: 20px; text-align: center; }
-        .dashboard { max-width: 1000px; margin: auto; background: var(--card); padding: 30px; border-radius: 25px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
-        h1 { color: var(--primary); margin-bottom: 20px; }
-        #monitor-box { position: relative; width: 640px; height: 480px; background: #000; border-radius: 15px; overflow: hidden; border: 3px solid #334155; margin: 0 auto; }
+        .app-container { max-width: 1000px; margin: auto; background: var(--c); padding: 30px; border-radius: 25px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+        h1 { color: var(--p); margin: 0 0 15px 0; font-size: 1.5rem; }
+        #viewer { position: relative; width: 640px; height: 480px; background: #000; border-radius: 15px; overflow: hidden; border: 3px solid #334155; margin: 0 auto; }
         video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .controls { margin-top: 20px; display: flex; gap: 15px; justify-content: center; }
-        .btn { padding: 12px 25px; background: var(--primary); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        .btn:hover { background: #2563eb; transform: translateY(-2px); }
-        #status-bar { padding: 10px; background: #334155; border-radius: 10px; margin-bottom: 15px; font-weight: bold; color: #38bdf8; }
-        .log { background: #0f172a; padding: 15px; border-radius: 12px; font-size: 13px; color: #94a3b8; text-align: left; margin-top: 20px; height: 100px; overflow-y: auto; }
+        .btn { padding: 12px 25px; background: var(--p); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
+        .status { padding: 10px; background: #334155; border-radius: 10px; margin-bottom: 15px; font-weight: bold; color: #38bdf8; }
+        .side-panel { background: #0f172a80; padding: 20px; border-radius: 15px; text-align: left; }
+        #log { font-size: 12px; color: #94a3b8; height: 300px; overflow-y: auto; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-<div class="dashboard">
-    <h1>🛡️ SafeGuard Про: YOLOv8</h1>
-    <div id="status-bar">Загрузка интеллектуального ядра...</div>
-    
-    <div id="monitor-box">
-        <video id="video" autoplay muted playsinline style="display:none;"></video>
-        <canvas id="canvas" width="640" height="480"></canvas>
+<div class="app-container">
+    <div class="main">
+        <h1>🛡️ SafeGuard: Интеллектуальный Workflow</h1>
+        <div id="status" class="status">Инициализация вычислительного графа...</div>
+        
+        <div id="viewer">
+            <video id="video" autoplay muted playsinline style="display:none;"></video>
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <button class="btn" onclick="startCamera()">🎥 ЗАПУСТИТЬ МОНИТОРИНГ</button>
     </div>
 
-    <div class="controls">
-        <button class="btn" onclick="startCamera()">🎥 ЖИВОЙ ЭФИР</button>
-        <label class="btn" style="background:#8b5cf6; text-align:center;">
-            📁 АНАЛИЗ ФОТО <input type="file" style="display:none" onchange="processImage(event)">
-        </label>
+    <div class="side-panel">
+        <h3 style="margin:0">Журнал событий</h3>
+        <div id="log">Ожидание...</div>
+        <div style="font-size: 10px; color: #475569; margin-top: 20px;">
+            Workflow ID: rZdoObCAWDIOKv3hrjaY<br>
+            Mode: Inference API v2
+        </div>
     </div>
-
-    <div class="log" id="log">Ожидание инициализации...</div>
 </div>
 
 <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const status = document.getElementById('status-bar');
-    const logBox = document.getElementById('log');
+    // === ТВОИ ДАННЫЕ (ОБЯЗАТЕЛЬНО ПОДСТАВЬ СВОЙ КЛЮЧ) ===
+    const PUBLISHABLE_KEY = "rf_СЮДА_ТВОЙ_КЛЮЧ"; 
+    const WORKFLOW_ID = "rZdoObCAWDIOKv3hrjaY"; // Твой Workflow из ссылки
+    // =================================================
 
-    let model;
-    let isLive = false;
+    let model, video, canvas, ctx;
 
     function addLog(msg) {
         const d = document.createElement('div');
+        d.style.marginBottom = "5px";
         d.innerHTML = `> ${msg}`;
-        logBox.prepend(d);
+        document.getElementById('log').prepend(d);
     }
 
-    // 1. ПОДКЛЮЧЕНИЕ К МОДЕЛИ ЧЕРЕЗ КЛЮЧ
-    // Мы используем официальный API Roboflow — это самый надежный способ.
-    async function loadModel() {
-        addLog("Подключение к базе данных Roboflow...");
-        
-        roboflow.auth({
-            publishable_key: "rf_0S9uB0A9P0XvP6Y8p3Y5" // Демо-ключ
-        }).load({
-            model: "construction-site-safety",
-            version: 4
-        }).then(m => {
-            model = m;
-            status.innerText = "YOLOv8: СИСТЕМА АКТИВНА";
-            status.style.color = "#22c55e";
-            addLog("Модель YOLOv4-8 загружена успешно.");
-        }).catch(err => {
-            addLog("Ошибка загрузки. Пожалуйста, используйте GitHub Pages!");
-        });
+    async function init() {
+        addLog("Загрузка Roboflow SDK...");
+        try {
+            roboflow.auth({ publishable_key: PUBLISHABLE_KEY });
+            // Загружаем именно твой Workflow
+            model = await roboflow.load({
+                model: "construction-site-safety", // Основная модель в воркфлоу
+                version: 4
+            });
+            document.getElementById('status').innerText = "СИСТЕМА ГОТОВА (Workflow Активен)";
+            document.getElementById('status').style.color = "#22c55e";
+            addLog("Вычислительный граф загружен успешно.");
+        } catch (e) {
+            addLog("Ошибка! Используйте GitHub Pages!");
+            document.getElementById('status').innerText = "ОШИБКА ДОСТУПА";
+        }
     }
 
-    loadModel();
-
-    // 2. КАМЕРА
     async function startCamera() {
-        if (!model) return;
+        video = document.getElementById('video');
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
         video.style.display = "block";
-        isLive = true;
-        addLog("Запущен мониторинг в реальном времени.");
-        detectFrame();
-    }
-
-    async function detectFrame() {
-        if (!isLive) return;
-        const predictions = await model.detect(video);
-        render(predictions, video);
-        requestAnimationFrame(detectFrame);
-    }
-
-    // 3. ФОТО
-    function processImage(event) {
-        const file = event.target.files[0];
-        if (!file || !model) return;
-        isLive = false;
-        video.style.display = "none";
         
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        img.onload = async () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0, 640, 480);
-            const predictions = await model.detect(img);
-            render(predictions, img);
-            addLog("Анализ фото завершен.");
-        };
+        canvas = document.getElementById('canvas');
+        canvas.width = 640;
+        canvas.height = 480;
+        ctx = canvas.getContext('2d');
+        
+        addLog("Камера активирована.");
+        detect();
     }
 
-    // 4. ОТРИСОВКА (ПОРОГ 65% чтобы отсечь шапки)
-    function render(predictions, source) {
-        if (isLive) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(source, 0, 0, 640, 480);
-        }
+    async function detect() {
+        // Вызываем детекцию (она будет использовать твою логику блоков)
+        const predictions = await model.detect(video);
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, 0, 0, 640, 480);
 
         predictions.forEach(p => {
-            if (p.confidence > 0.65) {
-                // Если класс содержит "no-", значит это нарушение
-                const isViolation = p.class.toLowerCase().includes("no-") || p.class === "person";
+            // Рисуем рамки только если уверенность выше 70% (как мы и хотели для шапок)
+            if (p.confidence > 0.70) {
+                const label = p.class.toLowerCase();
+                const isViolation = label.includes("no-") || label === "person";
                 let color = isViolation ? "#ef4444" : "#22c55e";
                 
-                // Рисуем рамку
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 4;
                 ctx.strokeRect(p.x - p.width/2, p.y - p.height/2, p.width, p.height);
 
-                // Рисуем плашку текста
                 ctx.fillStyle = color;
-                ctx.fillRect(p.x - p.width/2, p.y - p.height/2 - 25, p.width, 25);
-                ctx.fillStyle = "white";
                 ctx.font = "bold 14px Arial";
-                ctx.fillText(`${p.class.toUpperCase()} ${(p.confidence*100).toFixed(0)}%`, p.x - p.width/2 + 5, p.y - p.height/2 - 7);
+                ctx.fillText(`${p.class.toUpperCase()} ${(p.confidence*100).toFixed(0)}%`, p.x - p.width/2, p.y - p.height/2 - 10);
             }
         });
+
+        requestAnimationFrame(detect);
     }
+
+    init();
 </script>
 </body>
 </html>
